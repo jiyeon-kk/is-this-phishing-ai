@@ -10,6 +10,7 @@ import {
   RotateCw,
   Home as HomeIcon,
   ChevronRight,
+  CircleAlert,
 } from 'lucide-react'
 
 const LEVEL_STYLES = {
@@ -191,9 +192,36 @@ function Result({ result, loading, error, text, sender, onReset }) {
     )
   }
 
-  const { level, reasons, evidence, signals, cluster } = result
+  const {
+  level,
+  reasons,
+  evidence,
+  signals,
+  cluster,
+  campaign,
+  confidence,
+  review_required,
+  review_reason,
+} = result
+
   const levelStyle = LEVEL_STYLES[level] ?? LEVEL_STYLES.suspicious
   const LevelIcon = levelStyle.icon
+
+  const confidenceLabel = {
+    high: '높음',
+    medium: '보통',
+    low: '낮음',
+  }[confidence] ?? '확인 필요'
+
+  const confidenceStyle = {
+    high: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    medium: 'border-amber-200 bg-amber-50 text-amber-700',
+    low: 'border-red-200 bg-red-50 text-red-700',
+  }[confidence] ?? 'border-slate-200 bg-slate-50 text-slate-700'
+
+  const summaryMessage = review_required
+    ? '위험 가능성이 있지만 추가 확인이 필요합니다.'
+    : levelStyle.message
 
   return (
     <div
@@ -234,9 +262,49 @@ function Result({ result, loading, error, text, sender, onReset }) {
           <span>50</span>
           <span>100</span>
         </div>
-        <p className="text-xs font-medium text-slate-500">{levelStyle.message}</p>
+        <p className="text-xs font-medium text-slate-500">
+          {summaryMessage}
+        </p>
       </div>
 
+      {confidence && (
+  <div className="flex flex-col gap-3">
+    <div
+      className={`flex items-center justify-between rounded-xl border px-4 py-3 ${confidenceStyle}`}
+    >
+      <div className="flex items-center gap-2">
+        <ShieldQuestion size={16} strokeWidth={2.25} />
+        <span className="text-sm font-semibold">판단 신뢰도</span>
+      </div>
+
+      <span className="text-sm font-bold">{confidenceLabel}</span>
+    </div>
+
+    {review_required && (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="flex items-start gap-2">
+          <CircleAlert
+            size={17}
+            strokeWidth={2.25}
+            className="mt-0.5 flex-shrink-0 text-amber-600"
+          />
+
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-bold text-amber-800">
+              추가 확인 필요
+            </p>
+
+            {review_reason && (
+              <p className="text-xs leading-5 text-amber-700">
+                {review_reason}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
       {reasons?.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-slate-700">근거</p>
@@ -304,18 +372,88 @@ function Result({ result, loading, error, text, sender, onReset }) {
         </div>
       )}
 
+      {campaign?.matched && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-700">
+              유사 피싱 캠페인
+            </p>
+
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                campaign.status === 'rapidly_spreading'
+                  ? 'bg-red-50 text-red-700'
+                  : campaign.status === 'active'
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {campaign.status === 'rapidly_spreading'
+                ? '빠르게 확산 중'
+                : campaign.status === 'active'
+                  ? '활동 중'
+                  : '과거 사례'}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-800">
+              기존 {campaign.similar_case_count}건의 신고와 연결되었습니다.
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              연결 근거:{' '}
+              {campaign.match_type === 'domain'
+                ? '동일 도메인'
+                : campaign.match_type === 'sender'
+                  ? '동일 발신번호'
+                  : '유사 문구'}
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-[11px] text-slate-400">동일 도메인</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {campaign.shared_domain_count}건
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-[11px] text-slate-400">유사 문구</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {campaign.similar_phrase_count}건
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-[11px] text-slate-400">동일 발신번호</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {campaign.shared_sender_count}건
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-[11px] text-slate-400">최근 24시간</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {campaign.reports_last_24h}건
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {cluster && (
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-slate-700">클러스터 요약</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs text-slate-400">연결된 조직</p>
+              <p className="text-xs text-slate-400">연결된 특징 수</p>
               <p className="text-xl font-bold text-slate-900">
                 {cluster[CLUSTER_FIELDS.orgCount]}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs text-slate-400">총 신고 건수</p>
+              <p className="text-xs text-slate-400">연결된 캠페인 신고</p>
               <p className="text-xl font-bold text-slate-900">
                 {cluster[CLUSTER_FIELDS.reportCount]}
               </p>

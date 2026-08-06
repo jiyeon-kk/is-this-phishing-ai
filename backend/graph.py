@@ -20,6 +20,8 @@ STOPWORDS + 최소 길이로 걸러 조직별 분리를 유지 (아래 값은 �
 
 import config
 from backend import reputation
+from datetime import datetime, timedelta, timezone
+
 
 # --- 등록도메인(eTLD+1) 접기 --------------------------------------------
 # 풀호스트(a1.yhanwh.site)를 조직 단위(yhanwh.site)로 접어 같은 조직의
@@ -370,4 +372,183 @@ def match_cluster(pre: dict) -> dict | None:
         "size": c["size"],
         "report_count": len(c["reports"]),
         "risk": _risk(len(c["reports"]), len(c["domains"])),
+    }
+
+def match_campaign(pre: dict) -> dict | None:
+    """입력 문자와 연결된 피싱 캠페인의 상세 정보를 반환한다.
+
+    반환 예:
+    {
+        "matched": True,
+        "campaign_id": "조직-0",
+        "match_type": "domain" | "sender" | "phrase",
+        "similar_case_count": 10,
+        "shared_domain_count": 3,
+        "shared_sender_count": 1,
+        "similar_phrase_count": 5,
+        "first_seen": "...",
+        "last_seen": "...",
+        "reports_last_24h": 2,
+        "status": "active"
+    }
+    """
+
+    g = _build()
+    clusters = g["clusters"]
+
+    if not clusters:
+        return None
+
+    in_domains = {
+        _reg_domain(domain)
+        for domain in (pre.get("domains") or [])
+    }
+    in_sender = pre.get("sender")
+    in_tokens = _norm_tokens(pre.get("tokens", []) or [])
+
+    chosen: int | None = None
+    match_type: str | None = None
+
+    # 1. 도메인 매칭
+    best_domain_overlap = 0
+
+    for cid, cluster in clusters.items():
+        overlap = len(
+            in_domains & cluster["domains"]
+        )
+
+        if overlap > best_domain_overlap:
+            best_domain_overlap = overlap
+            chosen = cid
+            match_type = "domain"
+
+    # 2. 발신번호 매칭
+    if chosen is None and in_sender:
+        for cid, cluster in clusters.items():
+            if in_sender in cluster["senders"]:
+                chosen = cid
+                match_type = "sender"
+                break
+
+    # 3. 문구 매칭
+    best_phrase_overlap = 0
+
+    if chosen is None and in_tokens:
+        for cid, cluster in clusters.items():
+            overlap = len(
+                in_tokens & cluster["tokens"]
+            )
+
+            if overlap > best_phrase_overlap:
+                best_phrase_overlap = overlap
+                chosen = cid
+                match_type = "phrase"
+
+        if best_phrase_overlap < _MIN_SHARED_PHRASES:
+            chosen = None
+            match_type = None
+
+    if chosen is None:
+        return None
+
+    cluster = clusters[chosen]
+
+    # 현재 클러스터에 속한 신고 행 추출
+    cluster_reports = [
+        report
+        for report, cid in zip(
+            g["reports"],
+            g["report_cluster"],
+        )
+        if cid == chosen
+    ]
+
+    shared_domain_count = 0
+    shared_sender_count = 0
+    similar_phrase_count = 0
+
+    created_times: list[datetime] = []
+
+    for report in cluster_reports:
+        report_domains = {
+            _reg_domain(domain)
+            for domain in report.get("domains", [])
+        }
+
+        report_tokens = _norm_tokens(
+            report.get("tokens", []) or []
+        )
+
+        if in_domains and in_domains & report_domains:
+            shared_domain_count += 1
+
+        if (
+            in_sender
+            and report.get("sender") == in_sender
+        ):
+            shared_sender_count += 1
+
+        if (
+            in_tokens
+            and len(in_tokens & report_tokens)
+            >= _MIN_SHARED_PHRASES
+        ):
+            similar_phrase_count += 1
+
+        created_at = report.get("created_at")
+
+        if created_at:
+            try:
+                created_times.append(
+                    datetime.fromisoformat(created_at)
+                )
+            except ValueError:
+                pass
+
+    first_seen = (
+        min(created_times).isoformat()
+        if created_times
+        else None
+    )
+
+    last_seen = (
+        max(created_times).isoformat()
+        if created_times
+        else None
+    )
+
+    now = datetime.now(timezone.utc)
+    cutoff_24h = now - timedelta(hours=24)
+
+    reports_last_24h = sum(
+        created_at >= cutoff_24h
+        for created_at in created_times
+    )
+
+    # 현재는 간단한 상태 기준 사용
+    if reports_last_24h >= 5:
+        campaign_status = "rapidly_spreading"
+    elif reports_last_24h >= 1:
+        campaign_status = "active"
+    else:
+        campaign_status = "historical"
+    # 문구만으로 연결된 캠페인은 실제 유사 신고가
+    # 최소 2건 이상 있을 때만 유효한 캠페인으로 인정한다.
+    if (
+        match_type == "phrase"
+        and similar_phrase_count < 2
+    ):
+        return None
+    return {
+        "matched": True,
+        "campaign_id": f"조직-{chosen}",
+        "match_type": match_type,
+        "similar_case_count": len(cluster_reports),
+        "shared_domain_count": shared_domain_count,
+        "shared_sender_count": shared_sender_count,
+        "similar_phrase_count": similar_phrase_count,
+        "first_seen": first_seen,
+        "last_seen": last_seen,
+        "reports_last_24h": reports_last_24h,
+        "status": campaign_status,
     }

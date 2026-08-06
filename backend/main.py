@@ -19,12 +19,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from backend.adversarial_transform import generate_variants
 
 import config
 from backend import analyze as analyze_svc
 from backend import graph, reputation
 from backend import trends as trends_svc
 from backend.schemas import (
+    AdversarialRequest,
+    AdversarialResponse,
     AnalyzeRequest,
     AnalyzeResponse,
     GraphResponse,
@@ -79,12 +82,36 @@ def get_graph() -> dict:
 
 @app.post("/api/report", response_model=ReportResponse)
 def report(req: ReportRequest) -> ReportResponse:
-    """신고 저장 + 그래프 갱신 → {ok, cluster_count} (계약 ③)."""
-    cluster_count = analyze_svc.record_report(req.text, req.sender)
-    return ReportResponse(ok=True, cluster_count=cluster_count)
+    """신고 저장 + 그래프 갱신 + 신고 상태 반환 (계약 ③)."""
+
+    result = analyze_svc.record_report(
+        req.text,
+        req.sender,
+    )
+
+    return ReportResponse(
+        ok=True,
+        cluster_count=result["cluster_count"],
+        status=result["status"],
+        report_count=result["report_count"],
+    )
 
 
 @app.get("/api/trends", response_model=TrendsResponse)
 def get_trends() -> dict:
     """위협 트렌드 — 유저 신고(source='user')만 집계 (계약 ④)."""
     return trends_svc.get_trends()
+
+@app.post(
+    "/api/adversarial",
+    response_model=AdversarialResponse,
+)
+def generate_adversarial(
+    req: AdversarialRequest,
+) -> dict:
+    """원본 문자에서 데모용 우회 변형을 생성한다."""
+
+    return {
+        "original": req.text,
+        "variants": generate_variants(req.text),
+    }

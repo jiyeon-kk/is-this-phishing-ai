@@ -14,6 +14,26 @@ const OFFICIAL_REPORT_TARGETS = [
     url: 'https://spam.kisa.or.kr',
   },
 ]
+const REPORT_STATUS_LABELS = {
+  pending: '신고 후보',
+  suspected: '의심 사례',
+  confirmed: '확정 사례',
+  false_positive: '정상 판정',
+}
+
+const REPORT_STATUS_DESCRIPTIONS = {
+  pending: '최초 신고가 접수되어 추가 신고와 근거를 확인 중입니다.',
+  suspected: '동일 사례가 반복 신고되어 의심 사례로 분류되었습니다.',
+  confirmed: '반복 신고 기준을 충족하여 확정 사례로 분류되었습니다.',
+  false_positive: '검토 결과 정상 사례로 판정되었습니다.',
+}
+
+const REPORT_STATUS_STYLES = {
+  pending: 'border-slate-200 bg-slate-50 text-slate-700',
+  suspected: 'border-amber-200 bg-amber-50 text-amber-700',
+  confirmed: 'border-red-200 bg-red-50 text-red-700',
+  false_positive: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+}
 
 // AnalyzeResponse엔 urls 필드가 없음(계약 ①) → evidence에서 URL 관련 항목을 뽑아 씀.
 // type 값은 자유 텍스트라(backend/rules.py) 'url' 같은 고정값이 아니라 실제 타입 문자열로 매칭
@@ -44,6 +64,8 @@ function Report() {
     }),
   )
   const [submitting, setSubmitting] = useState(false)
+  const [reportResult, setReportResult] = useState(null)
+  const [reportError, setReportError] = useState('')
 
   const regeneratePreview = () => {
     setPreviewText(
@@ -58,24 +80,35 @@ function Report() {
   }
 
   // n21(PhishGuard 신고 제출) → n22(완료 메시지) → n23(그래프 갱신) → n24(조직 그래프 화면)
-  const handleReportToDb = async () => {
-    setSubmitting(true)
-    try {
-      await report(text, sender)
-      // 방금 신고한 문자 정보도 함께 넘겨 그래프에서 해당 노드를 강조 표시
-      navigate('/graph', {
-        state: {
-          justReported: true,
-          reportedText: text,
-          reportedSender: sender,
-          reportedUrls: extractUrls(result),
-        },
-      })
-    } catch (err) {
-      console.error('신고 요청 실패:', err)
-      setSubmitting(false)
-    }
+const handleReportToDb = async () => {
+  setSubmitting(true)
+  setReportError('')
+
+  try {
+    const response = await report(text, sender)
+
+    setReportResult({
+      status: response.status,
+      reportCount: response.report_count,
+      clusterCount: response.cluster_count,
+    })
+  } catch (err) {
+    console.error('신고 요청 실패:', err)
+    setReportError('신고 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    setSubmitting(false)
   }
+}
+ const handleGoToGraph = () => {
+  navigate('/graph', {
+    state: {
+      justReported: true,
+      reportedText: text,
+      reportedSender: sender,
+      reportedUrls: extractUrls(result),
+    },
+  })
+}
 
   const handleOfficialReport = async (url) => {
     try {
@@ -162,16 +195,73 @@ function Report() {
               className="w-full resize-none whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-sm text-slate-800 outline-none transition focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
             />
           </div>
+          {reportResult && (
+            <div
+              className={`rounded-xl border p-4 ${
+                REPORT_STATUS_STYLES[reportResult.status] ??
+                'border-slate-200 bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-bold">
+                    {REPORT_STATUS_LABELS[reportResult.status] ?? '신고 접수 완료'}
+                  </p>
 
+                  <p className="text-xs leading-5 opacity-80">
+                    {REPORT_STATUS_DESCRIPTIONS[reportResult.status] ??
+                      '신고가 정상적으로 접수되었습니다.'}
+                  </p>
+                </div>
+
+                <ShieldCheck size={20} strokeWidth={2.25} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-current/10 bg-white/60 px-3 py-2">
+                  <p className="text-[11px] opacity-70">동일 사례 누적 신고</p>
+                  <p className="text-lg font-bold">
+                    {reportResult.reportCount}건
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-current/10 bg-white/60 px-3 py-2">
+                  <p className="text-[11px] opacity-70">현재 클러스터 수</p>
+                  <p className="text-lg font-bold">
+                    {reportResult.clusterCount}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoToGraph}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:bg-white/80"
+              >
+                그래프에서 반영 결과 보기
+                <ExternalLink size={14} strokeWidth={2.25} />
+              </button>
+            </div>
+          )}
+          {reportError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {reportError}
+            </div>
+          )}
+          
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={handleReportToDb}
-              disabled={submitting}
+              disabled={submitting || Boolean(reportResult)}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShieldCheck size={16} strokeWidth={2.25} />
-              {submitting ? '제출 중...' : 'PhishGuard에 신고'}
+              {submitting
+                ? '제출 중...'
+                : reportResult
+                  ? '신고 완료'
+                  : 'PhishGuard에 신고'}
             </button>
 
             {OFFICIAL_REPORT_TARGETS.map(({ key, label, url }) => (
