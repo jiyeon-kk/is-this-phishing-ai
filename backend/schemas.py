@@ -422,3 +422,17 @@ class AdversarialResponse(BaseModel):
         default_factory=list,
         description="생성된 우회 변형 목록",
     )
+
+class ThreatFeedItem(BaseModel):
+    id: str
+    source: str
+    title: str
+    published_at: str
+    category: str
+    summary: str
+    keywords: list[str] = Field(default_factory=list)
+    url: str
+
+
+class ThreatFeedResponse(BaseModel):
+    items: list[ThreatFeedItem] = Field(default_factory=list)

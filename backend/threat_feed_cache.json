@@ -1,0 +1,136 @@
+[
+  {
+    "id": "kisa-3261",
+    "source": "KISA",
+    "title": "[주의] 청와대 사칭 메일 주의 안내",
+    "published_at": "2026-08-06",
+    "category": "사칭 주의",
+    "summary": "KISA에서 '청와대 사칭 메일 주의 안내' 관련 사칭 주의 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "사칭"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=3261"
+  },
+  {
+    "id": "kisa-3162",
+    "source": "KISA",
+    "title": "[주의] 정부 사칭 메일 주의 안내",
+    "published_at": "2026-05-19",
+    "category": "사칭 주의",
+    "summary": "KISA에서 '정부 사칭 메일 주의 안내' 관련 사칭 주의 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "정부",
+      "사칭"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=3162"
+  },
+  {
+    "id": "kisa-3102",
+    "source": "KISA",
+    "title": "[주의] 한국인터넷진흥원 직원 사칭 전화 주의 안내",
+    "published_at": "2026-04-29",
+    "category": "사칭 주의",
+    "summary": "KISA에서 '한국인터넷진흥원 직원 사칭 전화 주의 안내' 관련 사칭 주의 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "사칭"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=3102"
+  },
+  {
+    "id": "kisa-3061",
+    "source": "KISA",
+    "title": "[주의] 불법스트리밍 앱으로 인한 개인정보 유출 및 문자 무단발송 주의 권고",
+    "published_at": "2026-03-25",
+    "category": "위협 경보",
+    "summary": "KISA에서 '불법스트리밍 앱으로 인한 개인정보 유출 및 문자 무단발송 주의 권고' 관련 위협 경보 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "개인정보"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=3061"
+  },
+  {
+    "id": "kisa-2921",
+    "source": "KISA",
+    "title": "[주의] 이커머스(쿠팡) 해킹 피해 악용 스미싱·피싱 주의 권고",
+    "published_at": "2025-12-09",
+    "category": "스미싱",
+    "summary": "KISA에서 '이커머스(쿠팡) 해킹 피해 악용 스미싱·피싱 주의 권고' 관련 스미싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "스미싱",
+      "피싱",
+      "해킹"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2921"
+  },
+  {
+    "id": "kisa-2781",
+    "source": "KISA",
+    "title": "[주의] \"민생회복 소비쿠폰 지급\" 사칭 피싱 주의 권고",
+    "published_at": "2025-07-10",
+    "category": "피싱",
+    "summary": "KISA에서 '\"민생회복 소비쿠폰 지급\" 사칭 피싱 주의 권고' 관련 피싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "피싱",
+      "사칭"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2781"
+  },
+  {
+    "id": "kisa-2701",
+    "source": "KISA",
+    "title": "[주의] SKT 해킹 이슈를 악용한 피싱 주의 권고",
+    "published_at": "2025-05-09",
+    "category": "피싱",
+    "summary": "KISA에서 'SKT 해킹 이슈를 악용한 피싱 주의 권고' 관련 피싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "SKT",
+      "피싱",
+      "해킹"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2701"
+  },
+  {
+    "id": "kisa-2681",
+    "source": "KISA",
+    "title": "[주의] “유심 무료 교환”, “유심보호서비스” 등 사회적 이슈 관련 피싱·스미싱 공격 주의",
+    "published_at": "2025-04-30",
+    "category": "스미싱",
+    "summary": "KISA에서 '“유심 무료 교환”, “유심보호서비스” 등 사회적 이슈 관련 피싱·스미싱 공격 주의' 관련 스미싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "유심",
+      "스미싱",
+      "피싱"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2681"
+  },
+  {
+    "id": "kisa-2662",
+    "source": "KISA",
+    "title": "[주의] KISA(한국인터넷진흥원) 사칭 가상자산 피해환급 피싱 주의 권고",
+    "published_at": "2025-04-15",
+    "category": "피싱",
+    "summary": "KISA에서 'KISA(한국인터넷진흥원) 사칭 가상자산 피해환급 피싱 주의 권고' 관련 피싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "KISA",
+      "피싱",
+      "사칭"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2662"
+  },
+  {
+    "id": "kisa-2642",
+    "source": "KISA",
+    "title": "[주의] 카드 배송 사칭 보이스피싱·스미싱 주의 권고",
+    "published_at": "2025-04-01",
+    "category": "피싱·스미싱",
+    "summary": "KISA에서 '카드 배송 사칭 보이스피싱·스미싱 주의 권고' 관련 피싱·스미싱 주의를 안내하고 있습니다. 의심스러운 문자·링크는 공식 기관을 통해 직접 확인하세요.",
+    "keywords": [
+      "배송",
+      "카드",
+      "스미싱",
+      "피싱",
+      "보이스피싱"
+    ],
+    "url": "https://spam.kisa.or.kr/spam/na/ntt/selectNttInfo.do?bbsId=1001&mi=1019&nttSn=2642"
+  }
+]

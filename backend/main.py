@@ -19,12 +19,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.adversarial_transform import generate_variants
 
 import config
 from backend import analyze as analyze_svc
 from backend import graph, reputation
 from backend import trends as trends_svc
+from backend import threat_feed as threat_feed_svc
+from backend.adversarial_transform import generate_variants
 from backend.schemas import (
     AdversarialRequest,
     AdversarialResponse,
@@ -35,6 +36,7 @@ from backend.schemas import (
     ReportRequest,
     ReportResponse,
     TrendsResponse,
+    ThreatFeedResponse,
 )
 
 
@@ -114,4 +116,14 @@ def generate_adversarial(
     return {
         "original": req.text,
         "variants": generate_variants(req.text),
+    }
+
+@app.get(
+    "/api/threat-feed",
+    response_model=ThreatFeedResponse,
+)
+def get_threat_feed() -> dict:
+    """공식기관 최신 피싱·스미싱 위협 경보."""
+    return {
+        "items": threat_feed_svc.get_feed()
     }

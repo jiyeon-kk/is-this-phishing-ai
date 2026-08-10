@@ -10,6 +10,10 @@ pydantic==2.13.4
 # 없어도 "마지막 두 레이블" 폴백으로 돌지만, 정확한 클러스터링을 위해 설치 권장.
 tldextract>=5.0
 
+# 공식기관 최신 위협 경보 수집 — threat_feed.py
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
 # --- 시드 재생성(선택, backend/seed/reports.json 이미 커밋돼 있어 평소엔 불필요) ---
 # KISA CSV(한국인터넷진흥원_피싱사이트_*.csv, git 미포함)로 시드를 다시 만들 때만 필요.
 # pandas>=2.0
