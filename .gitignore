@@ -224,8 +224,20 @@ __marimo__/
 *.sqlite3
 
 .DS_Store
-ÇÑ±¹ÀÎÅÍ³İÁøÈï¿ø_*.csv
+ï¿½Ñ±ï¿½ï¿½ï¿½ï¿½Í³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½_*.csv
 reputation.db
 backend/reputation.db
 *.csv
 package-lock.json
+
+# PhishGuard retraining local artifacts
+ai/models/backups/
+ai/models/retraining_candidate/
+ai/models/text_clf_promote_test/
+
+ai/results/current_service_model/
+ai/results/model_comparison/
+ai/results/retraining_candidate/
+ai/results/retraining_pipeline/
+
+ai/data/retraining/

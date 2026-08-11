@@ -158,8 +158,9 @@ def _backfill_existing_rows(
 ) -> None:
     """기존 DB 행의 case_key와 status를 자동 보정한다.
 
-    이전 버전 DB에는 case_key와 status가 없었으므로
-    서버 시작 시 기존 데이터를 다시 전처리해 값을 채운다.
+    관리자에 의해 정상(label=0)으로 검증된 사례는
+    신고 횟수보다 관리자 검증 결과를 우선하여
+    false_positive 상태를 유지한다.
     """
 
     rows = con.execute(
@@ -202,34 +203,58 @@ def _backfill_existing_rows(
 
     con.commit()
 
-    # 2. case_key별 누적 신고 수 및 시드 포함 여부 계산
+    # 2. case_key별 상태 판단 정보 계산
     grouped_rows = con.execute(
         """
         SELECT
             case_key,
             COUNT(*) AS report_count,
+
             MAX(
                 CASE
-                    WHEN source = 'seed' THEN 1
+                    WHEN source = 'seed'
+                    THEN 1
                     ELSE 0
                 END
-            ) AS has_seed
+            ) AS has_seed,
+
+            MAX(
+                CASE
+                    WHEN training_approved = 1
+                     AND training_label = 0
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS verified_normal
+
         FROM reports
         WHERE case_key IS NOT NULL
         GROUP BY case_key
         """
     ).fetchall()
 
-    # 3. 같은 사례에 속한 기존 행의 상태를 모두 최신 상태로 맞춤
+    # 3. 상태 보정
     for row in grouped_rows:
         case_key = row["case_key"]
         report_count = int(row["report_count"])
         has_seed = bool(row["has_seed"])
-
-        status = _status_from_count(
-            report_count=report_count,
-            source="seed" if has_seed else "user",
+        verified_normal = bool(
+            row["verified_normal"]
         )
+
+        # 관리자 정상 판정이 최우선
+        if verified_normal:
+            status = _STATUS_FALSE_POSITIVE
+
+        else:
+            status = _status_from_count(
+                report_count=report_count,
+                source=(
+                    "seed"
+                    if has_seed
+                    else "user"
+                ),
+            )
 
         con.execute(
             """
@@ -261,16 +286,22 @@ def init_db() -> None:
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS reports (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                text       TEXT    NOT NULL,
-                sender     TEXT,
-                urls       TEXT    NOT NULL,
-                domains    TEXT    NOT NULL,
-                tokens     TEXT    NOT NULL,
-                source     TEXT    NOT NULL DEFAULT 'user',
-                case_key   TEXT,
-                status     TEXT    NOT NULL DEFAULT 'pending',
-                created_at TEXT    NOT NULL
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                text              TEXT    NOT NULL,
+                sender            TEXT,
+                urls              TEXT    NOT NULL,
+                domains           TEXT    NOT NULL,
+                tokens             TEXT    NOT NULL,
+                source            TEXT    NOT NULL DEFAULT 'user',
+                case_key          TEXT,
+                status            TEXT    NOT NULL DEFAULT 'pending',
+                training_approved   INTEGER NOT NULL DEFAULT 0,
+                training_label      INTEGER,
+                approved_at         TEXT,
+                used_for_training   INTEGER NOT NULL DEFAULT 0,
+                trained_model_version TEXT,
+                trained_at          TEXT,
+                created_at          TEXT    NOT NULL
             )
             """
         )
@@ -303,6 +334,55 @@ def init_db() -> None:
                 """
             )
 
+        if "training_approved" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN training_approved INTEGER
+                NOT NULL DEFAULT 0
+                """
+            )
+
+        if "training_label" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN training_label INTEGER
+                """
+            )
+
+        if "approved_at" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN approved_at TEXT
+                """
+            )
+
+        if "used_for_training" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN used_for_training INTEGER
+                NOT NULL DEFAULT 0
+                """
+            )
+
+        if "trained_model_version" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN trained_model_version TEXT
+                """
+            )
+
+        if "trained_at" not in existing_columns:
+            con.execute(
+                """
+                ALTER TABLE reports
+                ADD COLUMN trained_at TEXT
+                """
+            )
         con.commit()
 
         # DB가 완전히 비어 있으면 시드 데이터 삽입
@@ -647,6 +727,239 @@ def get_reports_by_status(
         for row in rows
     ]
 
+def get_training_candidates() -> list[dict]:
+    """AI 재학습 전 검토가 필요한 confirmed 고유 사례를 반환한다.
+
+    조건:
+    - 사용자 신고(source='user')
+    - confirmed 상태
+    - 아직 학습 승인되지 않음
+    - 동일 case_key는 1개의 후보로만 반환
+    """
+
+    con = _connect()
+
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                case_key,
+                MIN(text) AS text,
+                MIN(sender) AS sender,
+                COUNT(*) AS report_count,
+                MIN(created_at) AS first_seen,
+                MAX(created_at) AS last_seen,
+                MAX(training_approved) AS training_approved
+            FROM reports
+            WHERE source = 'user'
+              AND status = ?
+            GROUP BY case_key
+            HAVING MAX(training_approved) = 0
+            ORDER BY report_count DESC, last_seen DESC
+            """,
+            (_STATUS_CONFIRMED,),
+        ).fetchall()
+
+    finally:
+        con.close()
+
+    return [
+        {
+            "case_key": row["case_key"],
+            "text": row["text"],
+            "sender": row["sender"],
+            "status": _STATUS_CONFIRMED,
+            "report_count": int(row["report_count"]),
+            "training_approved": bool(
+                row["training_approved"]
+            ),
+            "first_seen": row["first_seen"],
+            "last_seen": row["last_seen"],
+        }
+        for row in rows
+    ]
+
+def approve_training_candidate(
+    case_key: str,
+    label: int,
+) -> dict:
+    """confirmed 신고 사례를 AI 재학습용 데이터로 승인한다.
+
+    label:
+    - 1 = phishing
+    - 0 = normal
+    """
+
+    if label not in (0, 1):
+        raise ValueError(
+            "training label은 0 또는 1이어야 합니다."
+        )
+
+    con = _connect()
+
+    try:
+        row = con.execute(
+            """
+            SELECT
+                case_key,
+                status,
+                COUNT(*) AS report_count
+            FROM reports
+            WHERE case_key = ?
+            GROUP BY case_key, status
+            """,
+            (case_key,),
+        ).fetchone()
+
+        if row is None:
+            raise ValueError(
+                "해당 case_key의 신고 사례를 찾을 수 없습니다."
+            )
+
+        if row["status"] != _STATUS_CONFIRMED:
+            raise ValueError(
+                "confirmed 상태의 사례만 학습 승인할 수 있습니다."
+            )
+
+        approved_at = _now()
+
+        # 관리자가 정상(label=0)으로 판정한 경우
+        # 반복 신고 사례라도 false_positive로 상태를 변경한다.
+        new_status = (
+            _STATUS_CONFIRMED
+            if label == 1
+            else _STATUS_FALSE_POSITIVE
+        )
+
+        con.execute(
+            """
+            UPDATE reports
+            SET
+                status = ?,
+                training_approved = 1,
+                training_label = ?,
+                approved_at = ?
+            WHERE case_key = ?
+            """,
+            (
+                new_status,
+                label,
+                approved_at,
+                case_key,
+            ),
+        )
+
+        con.commit()
+
+    finally:
+        con.close()
+
+    return {
+        "case_key": case_key,
+        "status": new_status,
+        "training_approved": True,
+        "training_label": label,
+        "approved_at": approved_at,
+        "report_count": int(row["report_count"]),
+    }
+
+def get_approved_training_samples() -> list[dict]:
+    """AI 재학습에 사용할 승인 완료 고유 사례를 반환한다.
+
+    조건:
+    - training_approved = 1
+    - training_label이 0 또는 1
+    - 동일 case_key는 1개의 학습 샘플로만 반환
+    """
+
+    con = _connect()
+
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                case_key,
+                MIN(text) AS text,
+                MIN(sender) AS sender,
+                MAX(training_label) AS training_label,
+                COUNT(*) AS report_count,
+                MIN(approved_at) AS approved_at
+            FROM reports
+            WHERE training_approved = 1
+            AND training_label IN (0, 1)
+            AND used_for_training = 0
+            GROUP BY case_key
+            ORDER BY approved_at ASC
+            """
+        ).fetchall()
+
+    finally:
+        con.close()
+
+    return [
+        {
+            "case_key": row["case_key"],
+            "text": row["text"],
+            "sender": row["sender"],
+            "label": int(row["training_label"]),
+            "report_count": int(row["report_count"]),
+            "approved_at": row["approved_at"],
+            "source": "user_report",
+        }
+        for row in rows
+    ]
+
+def mark_training_samples_used(
+    case_keys: list[str],
+    model_version: str,
+) -> dict:
+    """재학습에 사용한 사례들을 사용 완료 상태로 표시한다."""
+
+    if not case_keys:
+        return {
+            "updated_count": 0,
+            "model_version": model_version,
+        }
+
+    trained_at = _now()
+
+    placeholders = ",".join(
+        "?"
+        for _ in case_keys
+    )
+
+    con = _connect()
+
+    try:
+        cursor = con.execute(
+            f"""
+            UPDATE reports
+            SET
+                used_for_training = 1,
+                trained_model_version = ?,
+                trained_at = ?
+            WHERE case_key IN ({placeholders})
+              AND training_approved = 1
+            """,
+            (
+                model_version,
+                trained_at,
+                *case_keys,
+            ),
+        )
+
+        con.commit()
+
+        updated_count = cursor.rowcount
+
+    finally:
+        con.close()
+
+    return {
+        "updated_count": updated_count,
+        "model_version": model_version,
+        "trained_at": trained_at,
+    }
 
 def get_case_summary(
     case_key: str,
