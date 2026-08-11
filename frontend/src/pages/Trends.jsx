@@ -32,7 +32,7 @@ const MOCK_TRENDS = {
 const SECTIONS = [
   {
     key: 'top_phrases',
-    title: '최다 신고 문구',
+    title: '주요 피싱 유형',
     icon: MessageSquareText,
     colorClass: 'bg-slate-900',
   },

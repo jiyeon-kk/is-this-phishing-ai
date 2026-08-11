@@ -78,6 +78,32 @@ _MIN_TOKEN_LEN = 2  # 길이는 유지(환급 등 2자 유효어 보존). 필터
 # 클러스터 토큰 집합이 커서 자카드는 희석됨 → 공유 "개수"로 판정.
 _MIN_SHARED_PHRASES = 2
 
+# 화면에 표시할 핵심 문구만 별도로 제한한다.
+# IMPORTANT:
+# - 클러스터링/매칭은 기존 phrs 전체를 그대로 사용
+# - 아래 화이트리스트는 오직 그래프 시각화용 phrase 노드에만 적용
+_VISUAL_PHRASE_MIN_REPORTS = 2
+
+VISUAL_PHRASE_WHITELIST = {
+    # 계좌/금융
+    "계좌", "계좌정지", "거래", "거래정지", "출금", "출금정지",
+    "압류", "대출", "환급", "환급금", "환불", "결제", "결제취소",
+    "해외결제", "상품권",
+
+    # 배송/주소
+    "택배", "배송", "배송조회", "운송장", "주소불일치",
+
+    # 개인정보/보안
+    "개인정보", "정보유출", "명의도용", "본인인증", "인증번호",
+    "보안", "유심", "해킹", "악성앱", "악성코드",
+
+    # 사건/기관 사칭
+    "사건번호", "보이스피싱", "스미싱", "피싱", "사칭",
+
+    # 공공/지원금
+    "지원금", "보상금", "정부지원금",
+}
+
 
 # --- union-find --------------------------------------------------------
 class _UF:
@@ -215,8 +241,19 @@ def _compute() -> dict:
     root_to_cid = {root: cid for cid, root in enumerate(roots)}
     report_cluster = [root_to_cid[uf.find(i)] for i in range(n)]
 
-    # phrase 노드는 2건 이상 공유된 의미 토큰만 (싱글턴 클러터 방지)
+    # 클러스터링/매칭 의미 토큰 기준은 기존 그대로 유지한다.
     shared_tokens = {t for t, idxs in tok_idx.items() if len(idxs) >= 2}
+
+    # 화면에 그릴 phrase 노드만 강하게 필터링한다.
+    # 숫자, 테스트 문자열, 범용어 등은 화이트리스트에 없으므로 자동 제외.
+    visual_shared_tokens = {
+        t
+        for t, idxs in tok_idx.items()
+        if (
+            len(set(idxs)) >= _VISUAL_PHRASE_MIN_REPORTS
+            and t in VISUAL_PHRASE_WHITELIST
+        )
+    }
 
     # --- 노드 --------------------------------------------------------
     nodes: list[dict] = []
@@ -235,7 +272,7 @@ def _compute() -> dict:
         _add_node(f"num:{s}", s, "number", report_cluster[idxs[0]])
     # 문구 노드는 클러스터별로 분리 생성(id = phrase:<cid>:<token>).
     # 같은 문구라도 조직이 다르면 별개 노드 → 문구가 조직 간 다리가 되지 않음.
-    for t in shared_tokens:
+    for t in visual_shared_tokens:
         for i in tok_idx[t]:
             cid = report_cluster[i]
             _add_node(f"phrase:{cid}:{t}", t, "phrase", cid)
@@ -252,7 +289,7 @@ def _compute() -> dict:
         ents += [f"url:{h}" for h in hosts[i]]
         if sends[i]:
             ents.append(f"num:{sends[i]}")
-        ents += [f"phrase:{cid}:{t}" for t in phrs[i] if t in shared_tokens]
+        ents += [f"phrase:{cid}:{t}" for t in phrs[i] if t in visual_shared_tokens]
         ents = [e for e in ents if e in node_ids]
         if len(ents) < 2:
             continue
