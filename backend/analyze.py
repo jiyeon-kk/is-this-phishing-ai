@@ -343,7 +343,7 @@ def _to_display_score(
     )
 
     if corroborating_count == 0:
-        cap = 0.80
+        cap = 0.70
     elif corroborating_count == 1:
         cap = 0.93
     elif corroborating_count == 2:
