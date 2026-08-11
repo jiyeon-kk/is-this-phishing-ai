@@ -41,6 +41,25 @@ from backend.explain import explain
 _CLUSTER_BONUS = 0.10
 
 
+def _is_strong_cluster(cluster: dict | None) -> bool:
+    """최종 판단/신뢰도에 반영해도 되는 강한 클러스터인지 확인."""
+    if not cluster:
+        return False
+
+    match_type = cluster.get("match_type")
+
+    if match_type in {"domain", "sender"}:
+        return True
+
+    if match_type == "strong_phrase":
+        return (
+            int(cluster.get("shared_phrase_count", 0)) >= 2
+            and int(cluster.get("similar_phrase_count", 0)) >= 2
+        )
+
+    return False
+
+
 # ============================================================
 # 불확실성 판단 기준
 # ============================================================
@@ -250,7 +269,7 @@ def _apply_benign_adjustment(
     )
 
     strong_cluster_risk = (
-        cluster is not None
+        _is_strong_cluster(cluster)
         and cluster_risk >= 0.50
         and cluster_report_count >= 2
     )
@@ -310,7 +329,7 @@ def _to_display_score(
     strong_reputation = rep_s >= 0.30
 
     strong_cluster = (
-        cluster is not None
+        _is_strong_cluster(cluster)
         and cluster_risk >= 0.50
         and int(cluster.get("report_count", 0)) >= 2
     )
@@ -324,7 +343,7 @@ def _to_display_score(
     )
 
     if corroborating_count == 0:
-        cap = 0.90
+        cap = 0.80
     elif corroborating_count == 1:
         cap = 0.93
     elif corroborating_count == 2:
@@ -370,7 +389,7 @@ def _calculate_uncertainty(
     # 클러스터는 단순 매칭만으로 강한 근거로 보지 않는다.
     # 위험도와 반복 신고가 함께 확인되어야 위험 신호로 인정한다.
     cluster_risk_support = (
-        cluster is not None
+        _is_strong_cluster(cluster)
         and cluster_risk >= 0.50
         and cluster_report_count >= 2
     )
@@ -543,7 +562,7 @@ def analyze(text: str, sender: str | None = None) -> dict:
     # --------------------------------------------------------
     # 7. 조직 클러스터 위험도 반영
     # --------------------------------------------------------
-    if cluster:
+    if _is_strong_cluster(cluster):
         cluster_risk = float(
             cluster.get("risk", 0.0)
         )

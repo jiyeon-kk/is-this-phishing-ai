@@ -104,6 +104,11 @@ VISUAL_PHRASE_WHITELIST = {
     "지원금", "보상금", "정부지원금",
 }
 
+# 문구만으로 클러스터를 연결/매칭할 때는 식별력이 높은 핵심어만 사용한다.
+STRONG_PHRASE_TOKENS = frozenset(VISUAL_PHRASE_WHITELIST)
+_MIN_STRONG_SHARED_PHRASES = 2
+_MIN_SIMILAR_PHRASE_REPORTS = 2
+
 
 # --- union-find --------------------------------------------------------
 class _UF:
@@ -200,6 +205,10 @@ def _compute() -> dict:
     regs = [{_reg_domain(d) for d in r["domains"]} for r in reports]  # 클러스터용: 등록도메인
     sends = [r["sender"] for r in reports]
     phrs = [_norm_tokens(r["tokens"]) for r in reports]  # 조사 제거된 정규화 의미 토큰
+    strong_phrs = [
+        {t for t in tokens if t in STRONG_PHRASE_TOKENS}
+        for tokens in phrs
+    ]
 
     # 요소 → 그 요소를 가진 신고 인덱스 목록
     host_idx: dict[str, list[int]] = {}   # 노드 생성용(서브도메인)
@@ -225,15 +234,17 @@ def _compute() -> dict:
             for j in range(1, len(idxs)):
                 uf.union(idxs[0], idxs[j])
 
-    # 문구 union(조건부): 두 신고의 정규화 의미 토큰 교집합이 _MIN_SHARED_PHRASES 이상일 때만.
-    # 후보를 "토큰이 그 임계치 이상인 신고"로 좁혀 비용을 줄인다(대부분의 KISA URL은
-    # 문구가 0개라 후보에서 빠짐). n이 작아 후보쌍 O(m^2) 비교 허용.
-    phrase_reports = [i for i in range(n) if len(phrs[i]) >= _MIN_SHARED_PHRASES]
+    # 문구 union(조건부):
+    # 범용어가 아니라 강한 피싱 핵심어를 2개 이상 공유할 때만 연결한다.
+    phrase_reports = [
+        i for i in range(n)
+        if len(strong_phrs[i]) >= _MIN_STRONG_SHARED_PHRASES
+    ]
     for a in range(len(phrase_reports)):
         i = phrase_reports[a]
         for b in range(a + 1, len(phrase_reports)):
             k = phrase_reports[b]
-            if len(phrs[i] & phrs[k]) >= _MIN_SHARED_PHRASES:
+            if len(strong_phrs[i] & strong_phrs[k]) >= _MIN_STRONG_SHARED_PHRASES:
                 uf.union(i, k)
 
     # 연결요소 → 클러스터 정수 id (루트 순서대로 0..k-1)
@@ -317,7 +328,7 @@ def _compute() -> dict:
     for cid in range(len(roots)):
         clusters[cid] = {
             "reports": [], "domains": set(), "senders": set(),
-            "tokens": set(), "size": 0,
+            "tokens": set(), "strong_tokens": set(), "size": 0,
         }
     for i in range(n):
         cid = report_cluster[i]
@@ -327,6 +338,7 @@ def _compute() -> dict:
         if sends[i]:
             c["senders"].add(sends[i])
         c["tokens"] |= phrs[i]
+        c["strong_tokens"] |= strong_phrs[i]
     for node in nodes:
         clusters[node["cluster"]]["size"] += 1
 
@@ -359,46 +371,75 @@ def to_json() -> dict:
 
 
 def match_cluster(pre: dict) -> dict | None:
-    """pre dict -> 매칭 클러스터 요약 dict | None (계약 ⑤).
+    """신뢰 가능한 클러스터만 반환한다.
 
-    매칭 우선순위: 도메인 > 번호 > 문구 유사도. 아무것도 안 걸리면 None.
-    반환: {id, size, report_count, risk}
+    domain/sender는 직접 매칭을 인정하고,
+    phrase-only는 강한 핵심 피싱어 2개 이상 + 실제 유사 신고 2건 이상일 때만 인정한다.
     """
     g = _build()
     clusters = g["clusters"]
     if not clusters:
         return None
 
-    # 입력 도메인도 같은 등록도메인 기준으로 접어서 클러스터 도메인과 비교
     in_doms = {_reg_domain(d) for d in (pre.get("domains") or [])}
     in_send = pre.get("sender")
-    in_toks = _norm_tokens(pre.get("tokens", []) or [])  # 클러스터 토큰과 같은 정규화 기준
+    in_toks = _norm_tokens(pre.get("tokens", []) or [])
+    in_strong = {t for t in in_toks if t in STRONG_PHRASE_TOKENS}
 
-    chosen: int | None = None
+    chosen = None
+    match_type = None
+    shared_phrase_count = 0
+    similar_phrase_count = 0
 
-    # 1) 도메인 매칭 (가장 강함)
-    best_overlap = 0
+    # 1) 동일 등록도메인
+    best_domain_overlap = 0
     for cid, c in clusters.items():
-        ov = len(in_doms & c["domains"])
-        if ov > best_overlap:
-            best_overlap, chosen = ov, cid
+        overlap = len(in_doms & c["domains"])
+        if overlap > best_domain_overlap:
+            best_domain_overlap = overlap
+            chosen = cid
+            match_type = "domain"
 
-    # 2) 번호 매칭
+    # 2) 동일 발신번호
     if chosen is None and in_send:
         for cid, c in clusters.items():
             if in_send in c["senders"]:
                 chosen = cid
+                match_type = "sender"
                 break
 
-    # 3) 문구 매칭 (공유 토큰 개수 — 짧은 입력이라 자카드 대신 개수 기준)
-    if chosen is None and in_toks:
+    # 3) 강한 핵심문구
+    if chosen is None and in_strong:
         best_shared = 0
+        best_cid = None
+
         for cid, c in clusters.items():
-            shared = len(in_toks & c["tokens"])
+            shared = len(in_strong & c.get("strong_tokens", set()))
             if shared > best_shared:
-                best_shared, chosen = shared, cid
-        if best_shared < _MIN_SHARED_PHRASES:
-            chosen = None
+                best_shared = shared
+                best_cid = cid
+
+        if best_cid is not None and best_shared >= _MIN_STRONG_SHARED_PHRASES:
+            count = 0
+
+            for report, cid in zip(g["reports"], g["report_cluster"]):
+                if cid != best_cid:
+                    continue
+
+                report_tokens = _norm_tokens(report.get("tokens", []) or [])
+                report_strong = {
+                    t for t in report_tokens
+                    if t in STRONG_PHRASE_TOKENS
+                }
+
+                if len(in_strong & report_strong) >= _MIN_STRONG_SHARED_PHRASES:
+                    count += 1
+
+            if count >= _MIN_SIMILAR_PHRASE_REPORTS:
+                chosen = best_cid
+                match_type = "strong_phrase"
+                shared_phrase_count = best_shared
+                similar_phrase_count = count
 
     if chosen is None:
         return None
@@ -409,7 +450,11 @@ def match_cluster(pre: dict) -> dict | None:
         "size": c["size"],
         "report_count": len(c["reports"]),
         "risk": _risk(len(c["reports"]), len(c["domains"])),
+        "match_type": match_type,
+        "shared_phrase_count": shared_phrase_count,
+        "similar_phrase_count": similar_phrase_count,
     }
+
 
 def match_campaign(pre: dict) -> dict | None:
     """입력 문자와 연결된 피싱 캠페인의 상세 정보를 반환한다.
@@ -442,6 +487,10 @@ def match_campaign(pre: dict) -> dict | None:
     }
     in_sender = pre.get("sender")
     in_tokens = _norm_tokens(pre.get("tokens", []) or [])
+    in_strong_tokens = {
+        t for t in in_tokens
+        if t in STRONG_PHRASE_TOKENS
+    }
 
     chosen: int | None = None
     match_type: str | None = None
@@ -467,21 +516,22 @@ def match_campaign(pre: dict) -> dict | None:
                 match_type = "sender"
                 break
 
-    # 3. 문구 매칭
+    # 3. 강한 핵심 문구 매칭
     best_phrase_overlap = 0
 
-    if chosen is None and in_tokens:
+    if chosen is None and in_strong_tokens:
         for cid, cluster in clusters.items():
             overlap = len(
-                in_tokens & cluster["tokens"]
+                in_strong_tokens
+                & cluster.get("strong_tokens", set())
             )
 
             if overlap > best_phrase_overlap:
                 best_phrase_overlap = overlap
                 chosen = cid
-                match_type = "phrase"
+                match_type = "strong_phrase"
 
-        if best_phrase_overlap < _MIN_SHARED_PHRASES:
+        if best_phrase_overlap < _MIN_STRONG_SHARED_PHRASES:
             chosen = None
             match_type = None
 
@@ -525,10 +575,15 @@ def match_campaign(pre: dict) -> dict | None:
         ):
             shared_sender_count += 1
 
+        report_strong_tokens = {
+            t for t in report_tokens
+            if t in STRONG_PHRASE_TOKENS
+        }
+
         if (
-            in_tokens
-            and len(in_tokens & report_tokens)
-            >= _MIN_SHARED_PHRASES
+            in_strong_tokens
+            and len(in_strong_tokens & report_strong_tokens)
+            >= _MIN_STRONG_SHARED_PHRASES
         ):
             similar_phrase_count += 1
 
@@ -572,8 +627,8 @@ def match_campaign(pre: dict) -> dict | None:
     # 문구만으로 연결된 캠페인은 실제 유사 신고가
     # 최소 2건 이상 있을 때만 유효한 캠페인으로 인정한다.
     if (
-        match_type == "phrase"
-        and similar_phrase_count < 2
+        match_type == "strong_phrase"
+        and similar_phrase_count < _MIN_SIMILAR_PHRASE_REPORTS
     ):
         return None
     return {

@@ -121,7 +121,7 @@ class Campaign(BaseModel):
         description="캠페인 또는 클러스터 ID",
     )
 
-    match_type: Literal["domain", "sender", "phrase"] = Field(
+    match_type: Literal["domain", "sender", "phrase", "strong_phrase"] = Field(
         ...,
         description="캠페인 연결 근거",
     )
