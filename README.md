@@ -184,7 +184,8 @@ URL/문자 규칙 : 근거 부족
 → suspected
 
 5회 이상 반복 신고
-→ confirmed
+→ confirmed(검토 대상 사례)
+confirmed 사례는 바로 모델에 학습하지 않고, 검토 후 training_approved와 라벨을 부여한 사례만 재학습 데이터 후보로 사용합니다.
 ```
 
 동일한 문자가 반복 신고되더라도 학습 데이터에서는
