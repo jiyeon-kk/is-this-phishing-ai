@@ -1,6 +1,25 @@
-# 🛡️ PhishGuard
+<h1 align="center">🛡️ PhishGuard</h1>
 
-> **AI 문맥 분석, URL 구조 분석, 신고 이력, 유사 피싱 사례를 함께 활용하는 다중 신호 기반 피싱·스미싱 탐지 서비스**
+<p align="center">
+  <b>AI 문맥 분석·URL 구조 분석·신고 이력·유사 사례를 결합한 피싱·스미싱 탐지 서비스</b>
+</p>
+
+<p align="center">
+  위험도 · 판단 신뢰도 · 탐지 근거 · 유사 피싱 사례 추적
+</p>
+
+<p align="center">
+
+<img src="https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white"/>
+<img src="https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white"/>
+<img src="https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=black"/>
+<img src="https://img.shields.io/badge/PyTorch-Model-EE4C2C?logo=pytorch&logoColor=white"/>
+<img src="https://img.shields.io/badge/KcELECTRA-Classifier-6C63FF"/>
+<img src="https://img.shields.io/badge/SQLite-Reputation%20DB-003B57?logo=sqlite&logoColor=white"/>
+
+</p>
+
+<hr/>
 
 단순 키워드나 AI 모델 하나의 결과에만 의존하지 않고,
 **문자 문맥 · URL 구조 · 신고 이력 · 유사 사례 Graph**를 함께 분석하여
